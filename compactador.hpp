@@ -12,6 +12,7 @@ class Compactador {
     public:
         Compactador();
         void compactar();
+        void compactarPorCaracter(ifstream &FILE);
     private:
         int mostrarMenu();
         No* criarArvoreHuffman(priority_queue<No*, vector<No*>, NoComp> &q, int n);

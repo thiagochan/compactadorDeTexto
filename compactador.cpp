@@ -37,6 +37,26 @@ No* Compactador::criarArvoreHuffman(priority_queue<No*, vector<No*>, NoComp> &q,
     return q.top();
 }
 
+void Compactador::compactarPorCaracter(ifstream &FILE) {
+    map<char, int> contagem;
+    char buffer;
+    while(FILE.get(buffer)) {
+        contagem[buffer]++;
+    }
+
+    // Criar nós para os caracteres do alfabeto
+    priority_queue<No*, vector<No*>, NoComp> q;
+    for(auto u: contagem) {
+        string token(1, u.first);
+        int freq = u.second;
+
+        No *no = new No(token, freq, NULL, NULL);
+        q.push(no);
+    }
+
+    No* huffman = criarArvoreHuffman(q, contagem.size());
+}
+
 void Compactador::compactar() {
     int escolha = 7;
     while(escolha) {
@@ -55,23 +75,8 @@ void Compactador::compactar() {
                 return;
             }
 
-            map<char, int> contagem;
-            char buffer;
-            while(FILE.get(buffer)) {
-                contagem[buffer]++;
-            }
-
-            // Criar nós para os caracteres do alfabeto
-            priority_queue<No*, vector<No*>, NoComp> q;
-            for(auto u: contagem) {
-                string token(1, u.first);
-                int freq = u.second;
-
-                No *no = new No(token, freq, NULL, NULL);
-                q.push(no);
-            }
-
-            No* huffman = criarArvoreHuffman(q, contagem.size());
+            compactarPorCaracter(FILE);
+            
             FILE.close();
         }
     }
