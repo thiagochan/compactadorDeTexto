@@ -37,6 +37,20 @@ No* Compactador::criarArvoreHuffman(priority_queue<No*, vector<No*>, NoComp> &q,
     return q.top();
 }
 
+void Compactador::associarCaracterComHuffman(No* atual, map<uchar, uchar> &qntBitsCaracter, map<uchar, uchar> &associacao, uchar depth, uchar bitmask) {
+    if (atual==NULL) return;
+
+    if (atual->token != "") {
+        associacao[atual->token[0]] = bitmask;
+        qntBitsCaracter[atual->token[0]] = depth;
+        return;
+    }
+    else {
+        associarCaracterComHuffman(atual->esq, qntBitsCaracter, associacao, depth+1, bitmask);
+        associarCaracterComHuffman(atual->dir, qntBitsCaracter, associacao, depth+1, bitmask | (1<<depth));
+    }
+}
+
 void Compactador::compactarPorCaracter(ifstream &FILE) {
     map<char, int> contagem;
     char buffer;
@@ -55,6 +69,10 @@ void Compactador::compactarPorCaracter(ifstream &FILE) {
     }
 
     No* huffman = criarArvoreHuffman(q, contagem.size());
+
+     map<uchar, uchar> qntBitsCaracter, associacaoCaracterHuffman;
+     associarCaracterComHuffman(huffman, qntBitsCaracter, associacaoCaracterHuffman, 0, 0);
+     
 }
 
 void Compactador::compactar() {
