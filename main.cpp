@@ -4,5 +4,5 @@ using namespace std;
 
 int main() {
     Compactador compactador = Compactador();
-    compactador.compactar();
+    compactador.iniciar();
 }

@@ -12,8 +12,10 @@
 class Compactador {
     public:
         Compactador();
-        void compactar();
+        void iniciar();
         void associarCaracterComHuffman(No* atual, map<uchar, uchar> &qntBitsCaracter, map<uchar, uchar> &associacao, uchar depth, uchar bitmask);
+        void escreverArquivoCompactado(ifstream &original, map<uchar, uchar> &qntBitsCaracter, map<uchar, uchar> &associacao, map<char,int> &contagem);
+        void descompactarPorCaracter(ifstream &arquivo);
         void compactarPorCaracter(ifstream &FILE);
     private:
         int mostrarMenu();
