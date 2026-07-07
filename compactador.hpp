@@ -1,6 +1,7 @@
 #ifndef COMPACTADOR_H
 #define COMPACTADOR_H
 #include <iostream>
+#include <chrono>
 #include <fstream>
 #include <map>
 #include <queue>

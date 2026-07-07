@@ -161,7 +161,7 @@ void Compactador::descompactarPorCaracter(ifstream &arquivo) {
     No* huffman = criarArvoreHuffman(q, contagem.size(), id);
 
     // percorre a arvore a partir dos bits da compressão
-    ofstream saida("descomprimido.txt");
+    ofstream saida("descompactado.txt");
 
     int caracteres=0;
     No* atual = huffman;
@@ -203,14 +203,28 @@ void Compactador::iniciar() {
                 return;
             }
 
+            auto inicio = chrono::steady_clock::now();
             compactarPorCaracter(FILE);
+            auto fim = chrono::steady_clock::now();
+
+            auto tempo = chrono::duration_cast<chrono::milliseconds>(fim-inicio);
+
+            cout << "Nome do arquivo compactado: compactado.bin" << endl; 
+            cout << "Tempo decorrido: " << tempo.count() << " ms" << endl;
             
             FILE.close();
         }
         else if (escolha==3) {
             ifstream FILE(fileName, ios::binary);
 
+            auto inicio = chrono::steady_clock::now();
             descompactarPorCaracter(FILE);
+            auto fim = chrono::steady_clock::now();
+
+            auto tempo = chrono::duration_cast<chrono::milliseconds>(fim-inicio);
+
+            cout << "Nome do arquivo descompactado: descompactado.txt" << endl;
+            cout << "Tempo decorrido: " << tempo.count() << " ms" << endl;
 
             FILE.close();
         }
