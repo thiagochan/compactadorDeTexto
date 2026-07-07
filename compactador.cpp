@@ -15,10 +15,10 @@ int Compactador::mostrarMenu() {
     return op;
 }
 
-No* Compactador::criarArvoreHuffman(priority_queue<No*, vector<No*>, NoComp> &q, int n) {
-    for(int i = 0; i < n-1; i++) {
+No* Compactador::criarArvoreHuffman(priority_queue<No*, vector<No*>, NoComp> &q, int n, int nextId) {
+    for(int i = 0; i < n-1; i++, nextId++) {
         string token;
-        No *novo = new No(token, 0, NULL, NULL);
+        No *novo = new No(token, 0, nextId, NULL, NULL);
 
         No *x = q.top();
         q.pop();
@@ -37,7 +37,7 @@ No* Compactador::criarArvoreHuffman(priority_queue<No*, vector<No*>, NoComp> &q,
     return q.top();
 }
 
-void Compactador::associarCaracterComHuffman(No* atual, map<uchar, uchar> &qntBitsCaracter, map<uchar, uchar> &associacao, uchar depth, uchar bitmask) {
+void Compactador::associarCaracterComHuffman(No* atual, map<uchar, uchar> &qntBitsCaracter, map<uchar, int> &associacao, uchar depth, int bitmask) {
     if (atual==NULL) return;
 
     if (atual->token != "") {
@@ -51,7 +51,7 @@ void Compactador::associarCaracterComHuffman(No* atual, map<uchar, uchar> &qntBi
     }
 }
 
-void Compactador::escreverArquivoCompactado(ifstream &original, map<uchar, uchar> &qntBitsCaracter, map<uchar, uchar> &associacao, map<char,int> &contagem) {
+void Compactador::escreverArquivoCompactado(ifstream &original, map<uchar, uchar> &qntBitsCaracter, map<uchar, int> &associacao, map<char,int> &contagem) {
     ofstream compactado("compactado.bin", ios::binary);
     original.clear();
     original.seekg(0);
@@ -73,7 +73,7 @@ void Compactador::escreverArquivoCompactado(ifstream &original, map<uchar, uchar
     int writeBufferIdx = 0;
     while(original.get(readBuffer)) {
         uchar bitsCaracter = qntBitsCaracter[readBuffer];
-        uchar codigoHuffman = associacao[readBuffer];
+        int codigoHuffman = associacao[readBuffer];
 
         for(int i = 0; i < bitsCaracter; i++) {
             // verifica se está cheio o write buffer e limpa se sim
@@ -108,17 +108,20 @@ void Compactador::compactarPorCaracter(ifstream &FILE) {
 
     // Criar nós para os caracteres do alfabeto
     priority_queue<No*, vector<No*>, NoComp> q;
+    int id=0;
     for(auto u: contagem) {
         string token(1, u.first);
         int freq = u.second;
 
-        No *no = new No(token, freq, NULL, NULL);
+        No *no = new No(token, freq, id, NULL, NULL);
         q.push(no);
+        id++;
     }
 
-    No* huffman = criarArvoreHuffman(q, contagem.size());
+    No* huffman = criarArvoreHuffman(q, contagem.size(), id);
 
-    map<uchar, uchar> qntBitsCaracter, associacaoCaracterHuffman;
+    map<uchar, uchar> qntBitsCaracter;
+    map<uchar, int> associacaoCaracterHuffman;
     associarCaracterComHuffman(huffman, qntBitsCaracter, associacaoCaracterHuffman, 0, 0);
 
     escreverArquivoCompactado(FILE, qntBitsCaracter, associacaoCaracterHuffman, contagem);
@@ -144,16 +147,18 @@ void Compactador::descompactarPorCaracter(ifstream &arquivo) {
     // cria a priority queue
     int total = 0;
     priority_queue<No*, vector<No*>, NoComp> q;
+    int id =0;
     for(auto u: contagem) {
         string token(1, u.first);
         total += u.second;
-        No* novo = new No(token, u.second, NULL, NULL);
+        No* novo = new No(token, u.second, id, NULL, NULL);
 
         q.push(novo);
+        id++;
     }
 
     // recria arvore
-    No* huffman = criarArvoreHuffman(q, contagem.size());
+    No* huffman = criarArvoreHuffman(q, contagem.size(), id);
 
     // percorre a arvore a partir dos bits da compressão
     ofstream saida("descomprimido.txt");
@@ -165,17 +170,17 @@ void Compactador::descompactarPorCaracter(ifstream &arquivo) {
         arquivo.read(reinterpret_cast<char*>(&buffer), sizeof(buffer));
 
         for(int i = 0; i < 8; i++) {
+            if (buffer & (1<<i)){
+                atual = atual->dir;
+            } 
+            else atual = atual->esq;
+
             if (atual->token != "") {
                 caracteres++;
                 saida << atual->token;
                 atual = huffman;
                 if (caracteres==total) break;
             }
-
-            if (buffer & (1<<i)){
-                atual = atual->dir;
-            } 
-            else atual = atual->esq;
         }
     }
 }

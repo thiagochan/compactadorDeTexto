@@ -13,13 +13,13 @@ class Compactador {
     public:
         Compactador();
         void iniciar();
-        void associarCaracterComHuffman(No* atual, map<uchar, uchar> &qntBitsCaracter, map<uchar, uchar> &associacao, uchar depth, uchar bitmask);
-        void escreverArquivoCompactado(ifstream &original, map<uchar, uchar> &qntBitsCaracter, map<uchar, uchar> &associacao, map<char,int> &contagem);
+        void associarCaracterComHuffman(No* atual, map<uchar, uchar> &qntBitsCaracter, map<uchar, int> &associacao, uchar depth, int bitmask);
+        void escreverArquivoCompactado(ifstream &original, map<uchar, uchar> &qntBitsCaracter, map<uchar, int> &associacao, map<char,int> &contagem);
         void descompactarPorCaracter(ifstream &arquivo);
         void compactarPorCaracter(ifstream &FILE);
     private:
         int mostrarMenu();
-        No* criarArvoreHuffman(priority_queue<No*, vector<No*>, NoComp> &q, int n);
+        No* criarArvoreHuffman(priority_queue<No*, vector<No*>, NoComp> &q, int n, int nextId);
         
 };
 
