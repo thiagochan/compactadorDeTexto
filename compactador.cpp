@@ -53,6 +53,8 @@ void Compactador::associarCaracterComHuffman(No* atual, map<uchar, uchar> &qntBi
 
 void Compactador::escreverArquivoCompactado(ifstream &original, map<uchar, uchar> &qntBitsCaracter, map<uchar, uchar> &associacao, map<char,int> &contagem) {
     ofstream compactado("compactado.bin", ios::binary);
+    original.clear();
+    original.seekg(0);
 
     // quantidade de key, values tem o map contendo as frequencias dos caracteres
     int n = contagem.size();
@@ -73,26 +75,24 @@ void Compactador::escreverArquivoCompactado(ifstream &original, map<uchar, uchar
         uchar bitsCaracter = qntBitsCaracter[readBuffer];
         uchar codigoHuffman = associacao[readBuffer];
 
-        for(uchar i = 0; i < bitsCaracter; i++) {
-            // verifica se tem espaco no writebuffer, se tem, escreve
-            if (writeBufferIdx<8) {
-                if (codigoHuffman & (1<<i)) {
-                    writeBuffer |= (1<<i);
-                }
-
-                writeBufferIdx++;
-            }
-            else { // se não tiver espaço no writebuffer, escreve no arquivo e reseta ele
+        for(int i = 0; i < bitsCaracter; i++) {
+            // verifica se está cheio o write buffer e limpa se sim
+            if (writeBufferIdx==8) {
                 compactado.write(reinterpret_cast<const char*>(&writeBuffer), sizeof(writeBuffer));
                 writeBuffer = 0;
                 writeBufferIdx = 0;
             }
+
+            if (codigoHuffman & (1<<i)) {
+                writeBuffer |= (1<<writeBufferIdx);
+            }
+
+            writeBufferIdx++;
         }
     }
 
     // se restar algo no buffer, escreve o restante
     if (writeBufferIdx>0) compactado.write(reinterpret_cast<const char*>(&writeBuffer), sizeof(writeBuffer));
-
     compactado.close();
 }
 
@@ -102,6 +102,9 @@ void Compactador::compactarPorCaracter(ifstream &FILE) {
     while(FILE.get(buffer)) {
         contagem[buffer]++;
     }
+    /*
+    00000110011001100110011001100
+    */
 
     // Criar nós para os caracteres do alfabeto
     priority_queue<No*, vector<No*>, NoComp> q;
@@ -128,21 +131,53 @@ void Compactador::descompactarPorCaracter(ifstream &arquivo) {
     // le quantidade de entradas <caracter, freq>
     arquivo.read(reinterpret_cast<char*>(&n), sizeof(n));
 
+    map<char, int> contagem;
+
     // lê o map
-    ofstream teste("teste1.txt");
     for(int i = 0; i < n; i++) {
         arquivo.read(reinterpret_cast<char*>(&c), sizeof(c));
         arquivo.read(reinterpret_cast<char*>(&freq), sizeof(freq));
-        teste << c << " " << freq << endl;
+
+        contagem[c] = freq;
     }
 
-    teste.close();
-
     // cria a priority queue
+    int total = 0;
+    priority_queue<No*, vector<No*>, NoComp> q;
+    for(auto u: contagem) {
+        string token(1, u.first);
+        total += u.second;
+        No* novo = new No(token, u.second, NULL, NULL);
+
+        q.push(novo);
+    }
 
     // recria arvore
+    No* huffman = criarArvoreHuffman(q, contagem.size());
 
     // percorre a arvore a partir dos bits da compressão
+    ofstream saida("descomprimido.txt");
+
+    int caracteres=0;
+    No* atual = huffman;
+    char buffer;
+    while(caracteres<total) {
+        arquivo.read(reinterpret_cast<char*>(&buffer), sizeof(buffer));
+
+        for(int i = 0; i < 8; i++) {
+            if (atual->token != "") {
+                caracteres++;
+                saida << atual->token;
+                atual = huffman;
+                if (caracteres==total) break;
+            }
+
+            if (buffer & (1<<i)){
+                atual = atual->dir;
+            } 
+            else atual = atual->esq;
+        }
+    }
 }
 
 void Compactador::iniciar() {
