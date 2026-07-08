@@ -15,10 +15,10 @@ int Compactador::mostrarMenu() {
     return op;
 }
 
-No* Compactador::criarArvoreHuffman(priority_queue<No*, vector<No*>, NoComp> &q, int n) {
-    for(int i = 0; i < n-1; i++) {
+No* Compactador::criarArvoreHuffman(priority_queue<No*, vector<No*>, NoComp> &q, int n, int nextId) {
+    for(int i = 0; i < n-1; i++, nextId++) {
         string token;
-        No *novo = new No(token, 0, NULL, NULL);
+        No *novo = new No(token, 0, nextId, NULL, NULL);
 
         No *x = q.top();
         q.pop();
@@ -37,6 +37,154 @@ No* Compactador::criarArvoreHuffman(priority_queue<No*, vector<No*>, NoComp> &q,
     return q.top();
 }
 
+void Compactador::associarCaracterComHuffman(No* atual, map<uchar, uchar> &qntBitsCaracter, map<uchar, int> &associacao, uchar depth, int bitmask) {
+    if (atual==NULL) return;
+
+    if (atual->token != "") {
+        associacao[atual->token[0]] = bitmask;
+        qntBitsCaracter[atual->token[0]] = depth;
+        return;
+    }
+    else {
+        associarCaracterComHuffman(atual->esq, qntBitsCaracter, associacao, depth+1, bitmask);
+        associarCaracterComHuffman(atual->dir, qntBitsCaracter, associacao, depth+1, bitmask | (1<<depth));
+    }
+}
+
+void Compactador::escreverArquivoCompactado(ifstream &original, map<uchar, uchar> &qntBitsCaracter, map<uchar, int> &associacao, map<char,int> &contagem) {
+    ofstream compactado("compactado.bin", ios::binary);
+    original.clear();
+    original.seekg(0);
+
+    // quantidade de key, values tem o map contendo as frequencias dos caracteres
+    int n = contagem.size();
+    compactado.write(reinterpret_cast<const char*>(&n), sizeof(n));
+
+    // insere os registros do map
+    for (auto u : contagem) {
+        char caracter = u.first; int freq = u.second;
+
+        compactado.write(reinterpret_cast<const char*>(&caracter), sizeof(caracter));
+        compactado.write(reinterpret_cast<const char*>(&freq), sizeof(freq));
+    }
+
+    // percorre arquivo
+    char readBuffer, writeBuffer = 0;
+    int writeBufferIdx = 0;
+    while(original.get(readBuffer)) {
+        uchar bitsCaracter = qntBitsCaracter[readBuffer];
+        int codigoHuffman = associacao[readBuffer];
+
+        for(int i = 0; i < bitsCaracter; i++) {
+            // verifica se está cheio o write buffer e limpa se sim
+            if (writeBufferIdx==8) {
+                compactado.write(reinterpret_cast<const char*>(&writeBuffer), sizeof(writeBuffer));
+                writeBuffer = 0;
+                writeBufferIdx = 0;
+            }
+
+            if (codigoHuffman & (1<<i)) {
+                writeBuffer |= (1<<writeBufferIdx);
+            }
+
+            writeBufferIdx++;
+        }
+    }
+
+    // se restar algo no buffer, escreve o restante
+    if (writeBufferIdx>0) compactado.write(reinterpret_cast<const char*>(&writeBuffer), sizeof(writeBuffer));
+    compactado.close();
+}
+
+void Compactador::compactarPorCaracter(ifstream &FILE) {
+    map<char, int> contagem;
+    char buffer;
+    while(FILE.get(buffer)) {
+        contagem[buffer]++;
+    }
+    /*
+    00000110011001100110011001100
+    */
+
+    // Criar nós para os caracteres do alfabeto
+    priority_queue<No*, vector<No*>, NoComp> q;
+    int id=0;
+    for(auto u: contagem) {
+        string token(1, u.first);
+        int freq = u.second;
+
+        No *no = new No(token, freq, id, NULL, NULL);
+        q.push(no);
+        id++;
+    }
+
+    No* huffman = criarArvoreHuffman(q, contagem.size(), id);
+
+    map<uchar, uchar> qntBitsCaracter;
+    map<uchar, int> associacaoCaracterHuffman;
+    associarCaracterComHuffman(huffman, qntBitsCaracter, associacaoCaracterHuffman, 0, 0);
+
+    escreverArquivoCompactado(FILE, qntBitsCaracter, associacaoCaracterHuffman, contagem);
+}
+
+void Compactador::descompactarPorCaracter(ifstream &arquivo) {
+    int n, freq;
+    char c;
+
+    // le quantidade de entradas <caracter, freq>
+    arquivo.read(reinterpret_cast<char*>(&n), sizeof(n));
+
+    map<char, int> contagem;
+
+    // lê o map
+    for(int i = 0; i < n; i++) {
+        arquivo.read(reinterpret_cast<char*>(&c), sizeof(c));
+        arquivo.read(reinterpret_cast<char*>(&freq), sizeof(freq));
+
+        contagem[c] = freq;
+    }
+
+    // cria a priority queue
+    int total = 0;
+    priority_queue<No*, vector<No*>, NoComp> q;
+    int id =0;
+    for(auto u: contagem) {
+        string token(1, u.first);
+        total += u.second;
+        No* novo = new No(token, u.second, id, NULL, NULL);
+
+        q.push(novo);
+        id++;
+    }
+
+    // recria arvore
+    No* huffman = criarArvoreHuffman(q, contagem.size(), id);
+
+    // percorre a arvore a partir dos bits da compressão
+    ofstream saida("descompactado.txt");
+
+    int caracteres=0;
+    No* atual = huffman;
+    char buffer;
+    while(caracteres<total) {
+        arquivo.read(reinterpret_cast<char*>(&buffer), sizeof(buffer));
+
+        for(int i = 0; i < 8; i++) {
+            if (buffer & (1<<i)){
+                atual = atual->dir;
+            } 
+            else atual = atual->esq;
+
+            if (atual->token != "") {
+                caracteres++;
+                saida << atual->token;
+                atual = huffman;
+                if (caracteres==total) break;
+            }
+        }
+    }
+}
+
 void Compactador::gerarCodigos(No* raiz, string codigo, map<string, string>& codigos){
     if(raiz==NULL)return;
     
@@ -52,7 +200,7 @@ void Compactador::gerarCodigos(No* raiz, string codigo, map<string, string>& cod
     
 }
 
-void Compactador::escreverBits(ofstream &OUT, const string &codigo, unsigned char &byte, int &bitsNoByte){
+void Compactador::escreverBits(ofstream &OUT, string &codigo, unsigned char &byte, int &bitsNoByte){
     for(char bit : codigo){
         byte <<= 1;
 
@@ -78,53 +226,28 @@ void Compactador::finalizarBits(ofstream &OUT,unsigned char &byte, int &bitsNoBy
     OUT.put(byte);
 }
 
-void Compactador::compactar() {
-    int escolha = 7;
-    while(escolha) {
-        escolha = mostrarMenu();
-        if (escolha==0) break;
-        if (escolha>4) continue;
+void Compactador::escreverCabecalho(ofstream &OUT, map<string, int> &contagem) {
+    int n = contagem.size();
+    OUT.write(reinterpret_cast<const char*>(&n), sizeof(n));
 
-        cout << "Escreva o nome do arquivo: ";
-        string fileName; cin >> fileName;
+    for (auto u : contagem) {
+        string token = u.first;
+        int freq = u.second;
 
-        if (escolha==1) {
-            ifstream FILE(fileName);
+        // tamanho da string
+        int tamanho = token.size();
+        OUT.write(reinterpret_cast<const char*>(&tamanho), sizeof(tamanho));
 
-            if (!FILE.is_open()) {
-                cerr << "Erro ao abrir o arquivo" << endl;
-                return;
-            }
+        // caracteres da string
+        OUT.write(token.data(), tamanho);
 
-            map<char, int> contagem;
-            char buffer;
-            while(FILE.get(buffer)) {
-                contagem[buffer]++;
-            }
+        // frequência
+        OUT.write(reinterpret_cast<const char*>(&freq), sizeof(freq));
+    }
+}
 
-            // Criar nós para os caracteres do alfabeto
-            priority_queue<No*, vector<No*>, NoComp> q;
-            for(auto u: contagem) {
-                string token(1, u.first);
-                int freq = u.second;
-
-                No *no = new No(token, freq, NULL, NULL);
-                q.push(no);
-            }
-
-            No* huffman = criarArvoreHuffman(q, contagem.size());
-            FILE.close();
-        }
-
-        if (escolha==2) {
-            ifstream FILE(fileName);
-
-            if (!FILE.is_open()) {
-                cerr << "Erro ao abrir o arquivo" << endl;
-                return;
-            }
-
-            map<string, int> contagem;
+void Compactador::compactarPorPalavra(ifstream &FILE) {
+    map<string, int> contagem;
             string buffer;
             char character;
         
@@ -149,17 +272,19 @@ void Compactador::compactar() {
             }
 
 
-            // Criar nós para cada palavra e separador do texto
+            // Criar nó para cada palavra e separador do texto
             priority_queue<No*, vector<No*>, NoComp> q;
+            int id=0;
             for(auto u: contagem) {
                 string token = u.first;
                 int freq = u.second;
 
-                No *no = new No(token, freq, NULL, NULL);
+                No *no = new No(token, freq,id, NULL, NULL);
                 q.push(no);
+                id++;
             }
 
-            No* huffman = criarArvoreHuffman(q, contagem.size());
+            No* huffman = criarArvoreHuffman(q, contagem.size(),id);
 
             map<string,string>codigos;
             gerarCodigos(huffman, "", codigos);
@@ -167,14 +292,15 @@ void Compactador::compactar() {
             FILE.clear();
             FILE.seekg(0);
 
-            // for (auto u : codigos)cout << "\"" << u.first << "\" -> " << u.second << endl;
-
-            ofstream OUT(fileName + ".huff", ios::binary);
+            ofstream OUT("compactado.bin", ios::binary);
 
             if(!OUT.is_open()){
                 cerr << "Erro ao criar arquivo." << endl;
                 return;
             }
+
+            escreverCabecalho(OUT, contagem);
+
             unsigned char byte = 0;
             int bitsNoByte = 0;
             buffer.clear();
@@ -193,31 +319,155 @@ void Compactador::compactar() {
             finalizarBits(OUT, byte, bitsNoByte);
 
             OUT.close();
+}
 
-        //     ofstream OUT(fileName + ".huff");
-        //     if (!OUT.is_open()) {
-        //         cerr << "Erro ao criar o arquivo." << endl;
-        //         return;
-        //     }
-        //     while (FILE.get(character)){
-        //         if(character!='\n' && character!='\t' && character!=' '){
-        //             buffer+=character;
-        //         }else{
-        //             //escreve palavra encontrada
-        //             if(!buffer.empty()) {
-        //                 OUT << codigos[buffer];
-        //                 buffer.clear();
-        //             }
-        //             //escreve separador
-        //             OUT << codigos[string(1, character)];
-        //         }
-        //    }
-        //    //escreve ultima palavra
-        //    if(!buffer.empty()) {
-        //         OUT << codigos[buffer];
-        //         buffer.clear();
-        //     }
-        //     OUT.close();
+void Compactador::lerCabecalho(ifstream &FILE, map<string, int> &contagem) {
+    int n;
+    FILE.read(reinterpret_cast<char*>(&n), sizeof(n));
+
+    for (int i = 0; i < n; i++) {
+
+        int tamanho;
+        FILE.read(reinterpret_cast<char*>(&tamanho), sizeof(tamanho));
+
+        string token(tamanho, '\0');
+        FILE.read(&token[0], tamanho);
+
+        int freq;
+        FILE.read(reinterpret_cast<char*>(&freq), sizeof(freq));
+
+        contagem[token] = freq;
+    }
+}
+
+void Compactador::descompactarPorPalavra(ifstream &FILE) {
+    map<string, int> contagem;
+
+    lerCabecalho(FILE, contagem);
+
+    // cria a priority queue
+    int total = 0;
+    priority_queue<No*, vector<No*>, NoComp> q;
+    int id =0;
+    for(auto u: contagem) {
+        total += u.second;
+        No* novo = new No(u.first, u.second, id, NULL, NULL);
+
+        q.push(novo);
+        id++;
+    }
+    
+    //recria arvore
+    No* huffman = criarArvoreHuffman(q, contagem.size(), id);
+
+    ofstream saida("descompactado.txt");
+
+   int tokens = 0;
+    No* atual = huffman;
+    unsigned char buffer;
+
+    while (tokens < total && FILE.read(reinterpret_cast<char*>(&buffer), sizeof(buffer))) {
+
+        // percorre os bits do byte de tras pra frente seguindo a orde da escrita
+        for (int i = 7; i >= 0; i--) {
+
+            if (buffer & (1 << i))
+                atual = atual->dir;
+            else
+                atual = atual->esq;
+
+            // chegou em uma folha
+            if (atual->esq == NULL && atual->dir == NULL) {
+
+                saida << atual->token;
+
+                tokens++;
+                atual = huffman;
+
+                if (tokens == total)
+                    break;
+            }
+        }
+    }
+
+    saida.close();
+}
+
+
+void Compactador::iniciar() {
+    int escolha = 7;
+    while(escolha) {
+        escolha = mostrarMenu();
+        if (escolha==0) break;
+        if (escolha>4) continue;
+
+        cout << "Escreva o nome do arquivo: ";
+        string fileName; cin >> fileName;
+
+        if (escolha==1) {
+            ifstream FILE(fileName);
+
+            if (!FILE.is_open()) {
+                cerr << "Erro ao abrir o arquivo" << endl;
+                return;
+            }
+
+            auto inicio = chrono::steady_clock::now();
+            compactarPorCaracter(FILE);
+            auto fim = chrono::steady_clock::now();
+
+            auto tempo = chrono::duration_cast<chrono::milliseconds>(fim-inicio);
+
+            cout << "Nome do arquivo compactado: compactado.bin" << endl; 
+            cout << "Tempo decorrido: " << tempo.count() << " ms" << endl;
+            
+            FILE.close();
+        }
+        else if (escolha==3) {
+            ifstream FILE(fileName, ios::binary);
+
+            auto inicio = chrono::steady_clock::now();
+            descompactarPorCaracter(FILE);
+            auto fim = chrono::steady_clock::now();
+
+            auto tempo = chrono::duration_cast<chrono::milliseconds>(fim-inicio);
+
+            cout << "Nome do arquivo descompactado: descompactado.txt" << endl;
+            cout << "Tempo decorrido: " << tempo.count() << " ms" << endl;
+
+            FILE.close();
+        }
+
+        else if (escolha==2) {
+            ifstream FILE(fileName);
+
+            if (!FILE.is_open()) {
+                cerr << "Erro ao abrir o arquivo" << endl;
+                return;
+            }
+
+            auto inicio = chrono::steady_clock::now();
+            compactarPorPalavra(FILE);
+            auto fim = chrono::steady_clock::now();
+
+            auto tempo = chrono::duration_cast<chrono::milliseconds>(fim-inicio);
+
+            cout << "Nome do arquivo compactado: compactado.bin" << endl; 
+            cout << "Tempo decorrido: " << tempo.count() << " ms" << endl;
+
+            FILE.close();
+        }
+        else if (escolha==4) {
+            ifstream FILE(fileName, ios::binary);
+
+            auto inicio = chrono::steady_clock::now();
+            descompactarPorPalavra(FILE);
+            auto fim = chrono::steady_clock::now();
+
+            auto tempo = chrono::duration_cast<chrono::milliseconds>(fim-inicio);
+
+            cout << "Nome do arquivo descompactado: descompactado.txt" << endl;
+            cout << "Tempo decorrido: " << tempo.count() << " ms" << endl;
 
             FILE.close();
         }

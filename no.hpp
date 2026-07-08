@@ -9,10 +9,11 @@ class No {
     public:
         string token;
         int freq;
+        int id;
         No *esq;
         No *dir;
 
-        No(string token, int freq, No *esq, No *dir);
+        No(string token, int freq, int id, No *esq, No *dir);
 };
 
 class NoComp {
